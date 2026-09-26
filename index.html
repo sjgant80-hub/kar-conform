@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kar-conform — deterministic structured-output verifier</title>
+<meta name="description" content="Paste a JSON Schema contract and one or more AI-generated JSON outputs. Get a deterministic, third-party re-runnable PASS/FAIL per output plus a canonical hash that catches silent drift between runs. No LLM judge.">
+<style>
+  :root{
+    --bg:#0b0d12;
+    --panel:#12151d;
+    --panel-2:#171b26;
+    --border:#262b3a;
+    --text:#e7e9ee;
+    --muted:#9aa3b5;
+    --dim:#6b7386;
+    --accent:#7c9eff;
+    --accent-dim:#3a4a80;
+    --pass:#3ddc84;
+    --pass-bg:#123321;
+    --fail:#ff6b6b;
+    --fail-bg:#3a1418;
+    --warn:#f5c451;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    padding-bottom:80px;
+  }
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:28px 16px 40px;
+  }
+  header.top{
+    margin-bottom:22px;
+  }
+  header.top h1{
+    font-size:1.55rem;
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  header.top h1 .mark{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;height:34px;
+    border-radius:9px;
+    background:linear-gradient(135deg,var(--accent),#4d63c9);
+    color:#0b0d12;
+    font-weight:800;
+    font-size:1rem;
+  }
+  header.top p.tag{
+    color:var(--muted);
+    margin:0;
+    font-size:0.98rem;
+    max-width:66ch;
+  }
+  .badgebar{
+    margin-top:10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .badge{
+    font-size:0.72rem;
+    padding:3px 8px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    color:var(--muted);
+    background:var(--panel);
+    letter-spacing:0.02em;
+  }
+
+  section{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:18px 18px 20px;
+    margin-bottom:16px;
+  }
+  section > h2{
+    font-size:1rem;
+    margin:0 0 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  section > h2 .num{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:22px;height:22px;
+    border-radius:6px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    font-size:0.72rem;
+    color:var(--muted);
+  }
+
+  details.scope summary{
+    cursor:pointer;
+    font-weight:600;
+    color:var(--text);
+    list-style:none;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  details.scope summary::-webkit-details-marker{display:none;}
+  details.scope summary::before{
+    content:"▸";
+    color:var(--accent);
+    transition:transform .15s ease;
+    display:inline-block;
+  }
+  details.scope[open] summary::before{ transform:rotate(90deg); }
+  .scope-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-top:14px;
+  }
+  @media (max-width:640px){ .scope-grid{ grid-template-columns:1fr; } }
+  .scope-col h3{
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--muted);
+    margin:0 0 8px;
+  }
+  .scope-col ul{
+    margin:0;
+    padding-left:18px;
+    font-size:0.89rem;
+    color:var(--text);
+  }
+  .scope-col.limits ul{ color:var(--muted); }
+  .scope-col li{ margin-bottom:5px; }
+  code.kw{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    padding:1px 5px;
+    border-radius:5px;
+    font-family:var(--mono);
+    font-size:0.83em;
+  }
+
+  .selftest{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    padding:14px;
+    border-radius:10px;
+    border:1px solid var(--border);
+  }
+  .selftest.pass{ background:var(--pass-bg); border-color:#1e5c3d; }
+  .selftest.fail{ background:var(--fail-bg); border-color:#7a2a30; }
+  .selftest .dot{
+    width:11px;height:11px;border-radius:50%;
+    margin-top:5px; flex:none;
+  }
+  .selftest.pass .dot{ background:var(--pass); box-shadow:0 0 8px var(--pass); }
+  .selftest.fail .dot{ background:var(--fail); box-shadow:0 0 8px var(--fail); }
+  .selftest .body{ flex:1; min-width:0; }
+  .selftest .title{ font-weight:700; margin-bottom:4px; }
+  .selftest .list{ font-size:0.85rem; color:var(--muted); }
+  .selftest .list div{ margin-bottom:2px; font-family:var(--mono); font-size:0.8rem; }
+  .selftest .list .ok::before{ content:"✓ "; color:var(--pass); }
+  .selftest .list .bad::before{ content:"✗ "; color:var(--fail); }
+
+  label.fieldlabel{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:0.82rem;
+    color:var(--muted);
+    margin-bottom:6px;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  textarea{
+    width:100%;
+    background:#0d1017;
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:11px 12px;
+    font-family:var(--mono);
+    font-size:0.83rem;
+    resize:vertical;
+    min-height:120px;
+    line-height:1.45;
+  }
+  textarea:focus{ outline:none; border-color:var(--accent); }
+  textarea.small{ min-height:96px; }
+
+  .hashline{
+    font-family:var(--mono);
+    font-size:0.74rem;
+    color:var(--dim);
+    word-break:break-all;
+  }
+
+  .btnrow{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+  button{
+    font-family:var(--sans);
+    font-size:0.85rem;
+    padding:8px 14px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--text);
+    cursor:pointer;
+  }
+  button:hover{ border-color:var(--accent); }
+  button:active{ transform:translateY(1px); }
+  button.primary{
+    background:var(--accent);
+    color:#0a0e18;
+    border-color:var(--accent);
+    font-weight:700;
+  }
+  button.primary:hover{ background:#8fadff; }
+  button.ghost{ background:transparent; }
+  button.tiny{
+    padding:4px 9px;
+    font-size:0.74rem;
+  }
+  button.danger:hover{ border-color:var(--fail); color:var(--fail); }
+  button:disabled{ opacity:0.45; cursor:not-allowed; }
+
+  .candidate{
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px;
+    margin-bottom:12px;
+    background:var(--panel-2);
+  }
+  .candidate .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .candidate .head .name{
+    font-weight:700;
+    font-size:0.85rem;
+  }
+  .verify-cta{
+    text-align:center;
+    margin:18px 0;
+  }
+  .verify-cta button{
+    padding:12px 30px;
+    font-size:0.98rem;
+    border-radius:10px;
+  }
+
+  .overview{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+  .stat{
+    flex:1;
+    min-width:120px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px 12px;
+    background:var(--panel-2);
+  }
+  .stat .n{ font-size:1.4rem; font-weight:800; }
+  .stat .l{ font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; }
+  .stat.pass .n{ color:var(--pass); }
+  .stat.fail .n{ color:var(--fail); }
+
+  .consistency{
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px;
+    margin-bottom:14px;
+    font-size:0.88rem;
+  }
+  .consistency.ok{ border-color:#1e5c3d; background:var(--pass-bg); }
+  .consistency.drift{ border-color:#6b5416; background:#332608; }
+  .consistency .group{
+    font-family:var(--mono);
+    font-size:0.76rem;
+    color:var(--muted);
+    margin-top:6px;
+  }
+
+  .result-card{
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px;
+    margin-bottom:12px;
+    background:var(--panel-2);
+  }
+  .result-card.pass{ border-left:4px solid var(--pass); }
+  .result-card.fail{ border-left:4px solid var(--fail); }
+  .result-card .rhead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .result-card .rhead .name{ font-weight:700; }
+  .verdict-pill{
+    font-size:0.72rem;
+    font-weight:800;
+    letter-spacing:0.04em;
+    padding:3px 10px;
+    border-radius:999px;
+  }
+  .verdict-pill.pass{ background:rgba(61,220,132,0.15); color:var(--pass); }
+  .verdict-pill.fail{ background:rgba(255,107,107,0.15); color:var(--fail); }
+  .violation{
+    font-family:var(--mono);
+    font-size:0.79rem;
+    background:#0d1017;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 10px;
+    margin-bottom:6px;
+  }
+  .violation .path{ color:var(--warn); }
+  details.canon{
+    margin-top:8px;
+  }
+  details.canon summary{
+    cursor:pointer;
+    font-size:0.78rem;
+    color:var(--muted);
+  }
+  pre.canonblock{
+    background:#0d1017;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px;
+    font-family:var(--mono);
+    font-size:0.76rem;
+    overflow-x:auto;
+    margin:8px 0 0;
+    white-space:pre-wrap;
+    word-break:break-all;
+  }
+
+  .repro{
+    font-size:0.87rem;
+    color:var(--muted);
+  }
+  .repro ol{ padding-left:20px; }
+  .repro li{ margin-bottom:8px; }
+  .repro code{
+    font-family:var(--mono);
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    padding:1px 5px;
+    border-radius:5px;
+    font-size:0.82em;
+    color:var(--text);
+  }
+
+  footer{
+    max-width:920px;
+    margin:0 auto;
+    padding:0 16px;
+    color:var(--dim);
+    font-size:0.78rem;
+    text-align:center;
+  }
+  footer a{ color:var(--muted); }
+  .toast{
+    position:fixed;
+    bottom:18px; left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--panel-2);
+    border:1px solid var(--accent);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:10px;
+    font-size:0.83rem;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .18s ease, transform .18s ease;
+    z-index:50;
+  }
+  .toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+  .empty-hint{
+    color:var(--dim);
+    font-size:0.85rem;
+    font-style:italic;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1><span class="mark">⊟</span> kar-conform</h1>
+    <p class="tag">Paste a JSON Schema contract and one or more JSON outputs an AI tool produced. Get a deterministic PASS/FAIL per output — exact violation, exact path — plus a canonical SHA-256 hash so you can tell "reformatted the same answer" apart from "quietly changed the answer" across reruns. Everything runs in your browser; nothing is sent anywhere; the same inputs always produce the same verdict, on this page or anyone else's copy of it.</p>
+    <div class="badgebar">
+      <span class="badge">no network calls</span>
+      <span class="badge">no LLM judge</span>
+      <span class="badge">deterministic</span>
+      <span class="badge">third-party re-runnable</span>
+      <span class="badge">works offline</span>
+    </div>
+  </header>
+
+  <section>
+    <details class="scope" open>
+      <summary>What this actually checks (read before trusting a verdict)</summary>
+      <div class="scope-grid">
+        <div class="scope-col">
+          <h3>In scope</h3>
+          <ul>
+            <li>Structural conformance to a JSON Schema contract: <code class="kw">type</code>, <code class="kw">required</code>, <code class="kw">properties</code>, <code class="kw">additionalProperties</code>, <code class="kw">patternProperties</code>, <code class="kw">items</code> (incl. tuple form), <code class="kw">enum</code>, <code class="kw">const</code>, <code class="kw">minimum</code>/<code class="kw">maximum</code>/<code class="kw">exclusiveMinimum</code>/<code class="kw">exclusiveMaximum</code>/<code class="kw">multipleOf</code>, <code class="kw">minLength</code>/<code class="kw">maxLength</code>/<code class="kw">pattern</code>, <code class="kw">minItems</code>/<code class="kw">maxItems</code>/<code class="kw">uniqueItems</code>, <code class="kw">allOf</code>/<code class="kw">anyOf</code>/<code class="kw">oneOf</code>/<code class="kw">not</code>, local <code class="kw">$ref</code> into <code class="kw">$defs</code>/<code class="kw">definitions</code>.</li>
+            <li>Canonical form: object keys sorted, whitespace stripped, numbers via standard JS number-to-string — so two JSON blobs that mean the same thing hash the same, regardless of key order or spacing.</li>
+            <li>Cross-run consistency: among the candidates that pass, are they canonically identical (stable) or do they diverge (silent drift between calls)?</li>
+          </ul>
+        </div>
+        <div class="scope-col limits">
+          <h3>Not in scope / honest limits</h3>
+          <ul>
+            <li>This is a useful subset of JSON Schema (2020-12 flavoured), not the full spec — no <code class="kw">$dynamicRef</code>, no remote <code class="kw">$ref</code>, no <code class="kw">if</code>/<code class="kw">then</code>/<code class="kw">else</code>, no vocabulary extensions.</li>
+            <li><code class="kw">format</code> (email / date-time / uri / uuid) is checked with plain best-effort regexes, not the RFC grammars — treat format failures as a hint, not a verdict.</li>
+            <li>It cannot tell you the JSON is <em>true</em>, only that it is <em>shaped</em> the way the contract said it would be. A model can satisfy the schema and still be wrong about the world.</li>
+            <li>Canonical-hash matching proves byte-for-byte structural equality after normalization — it is not a semantic/fuzzy "close enough" comparator.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2><span class="num">✓</span> Self-test (runs automatically, on this page's own bundled example)</h2>
+    <div id="selftest" class="selftest">
+      <div class="dot"></div>
+      <div class="body">
+        <div class="title">Running…</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">1</span> Contract (JSON Schema)</h2>
+    <label class="fieldlabel">
+      <span>The rules an AI output is supposed to obey</span>
+      <span>
+        <button class="tiny ghost" id="loadExampleBtn" type="button">Load example</button>
+        <button class="tiny ghost" id="clearSchemaBtn" type="button">Clear</button>
+      </span>
+    </label>
+    <textarea id="schemaInput" spellcheck="false"></textarea>
+    <div class="hashline" id="schemaHashLine">contract hash: —</div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span> Candidate outputs</h2>
+    <p class="empty-hint" style="margin-top:-4px;">One per box. Add every run you want compared — e.g. the same prompt called three times.</p>
+    <div id="candidateList"></div>
+    <div class="btnrow">
+      <button id="addCandidateBtn" type="button">+ Add candidate</button>
+    </div>
+  </section>
+
+  <div class="verify-cta">
+    <button class="primary" id="verifyBtn" type="button">Verify all candidates</button>
+  </div>
+
+  <section id="resultsSection" style="display:none;">
+    <h2><span class="num">3</span> Results</h2>
+    <div id="overview" class="overview"></div>
+    <div id="consistency"></div>
+    <div id="resultCards"></div>
+  </section>
+
+  <section>
+    <h2><span class="num">↻</span> How to reproduce this verdict without this page</h2>
+    <div class="repro">
+      <ol>
+        <li>Validate each candidate JSON against the contract's JSON Schema keywords listed above, in any conformant validator, recording every violation as <code>(path, message)</code>.</li>
+        <li>Canonicalize any JSON value <code>v</code> recursively: objects → <code>{}</code> with keys sorted ascending by UTF-16 code unit and re-emitted as <code>"key":canon(value)</code> joined by commas; arrays → <code>[]</code> with elements in original order; strings → standard JSON string escaping; numbers → the ECMAScript <code>Number.prototype.toString()</code> form (reject <code>NaN</code>/<code>Infinity</code>, normalize <code>-0</code> to <code>0</code>); <code>true</code>/<code>false</code>/<code>null</code> literally. No inserted whitespace anywhere.</li>
+        <li>UTF-8 encode the canonical string and take <code>SHA-256</code>, hex-encoded lowercase. That is the hash shown per candidate and for the contract itself.</li>
+        <li>Two candidates with the same hash are, by construction, the same JSON value — independent of formatting, spacing or key order. Two passing candidates with different hashes proved the AI's output actually changed between runs, not just its formatting.</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    kar-conform — one sovereign HTML file, no server, no account, no pricing. Built by Kar, resident of the FallForge estate. Re-run it, fork it, or read the algorithm above and reimplement it in any language — the verdict does not depend on trusting this page.
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- canonical JSON + hashing ---------- */
+
+  function canonicalize(v){
+    if (v === null) return "null";
+    const t = typeof v;
+    if (t === "boolean") return v ? "true" : "false";
+    if (t === "number"){
+      if (!Number.isFinite(v)) throw new Error("non-finite number is not valid JSON");
+      if (Object.is(v, -0)) return "0";
+      return String(v);
+    }
+    if (t === "string") return JSON.stringify(v);
+    if (Array.isArray(v)) return "[" + v.map(canonicalize).join(",") + "]";
+    if (t === "object"){
+      const keys = Object.keys(v).sort();
+      return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalize(v[k])).join(",") + "}";
+    }
+    throw new Error("unsupported JSON value");
+  }
+
+  async function sha256Hex(str){
+    const bytes = new TextEncoder().encode(str);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2,"0")).join("");
+  }
+
+  function deepEqual(a,b){
+    try { return canonicalize(a) === canonicalize(b); } catch(e){ return false; }
+  }
+
+  /* ---------- JSON Schema validator (documented subset) ---------- */
+
+  function typeOf(v){
+    if (v === null) return "null";
+    if (Array.isArray(v)) return "array";
+    if (typeof v === "number") return Number.isInteger(v) ? "integer" : "number";
+    if (typeof v === "boolean") return "boolean";
+    if (typeof v === "string") return "string";
+    if (typeof v === "object") return "object";
+    return "undefined";
+  }
+
+  function typeMatches(declared, actual){
+    if (declared === "number") return actual === "integer" || actual === "number";
+    return declared === actual;
+  }
+
+  function resolveRef(ref, root){
+    if (typeof ref !== "string" || ref.charAt(0) !== "#") {
+      throw new Error("unsupported $ref (only local '#/...' refs are supported): " + ref);
+    }
+    const parts = ref.slice(1).split("/").filter(Boolean).map(p =>
+      decodeURIComponent(p).replace(/~1/g,"/").replace(/~0/g,"~")
+    );
+    let node = root;
+    for (const p of parts){
+      if (node && typeof node === "object" && Object.prototype.hasOwnProperty.call(node, p)){
+        node = node[p];
+      } else {
+        throw new Error("cannot resolve $ref " + ref);
+      }
+    }
+    return node;
+  }
+
+  const FORMAT_RE = {
+    "email": /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    "date-time": /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/,
+    "date": /^\d{4}-\d{2}-\d{2}$/,
+    "uri": /^[a-zA-Z][a-zA-Z0-9+.-]*:\S+$/,
+    "uuid": /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+  };
+
+  function validate(schema, instance, path, root, errors){
+    if (schema === true) return;
+    if (schema === false){ errors.push({path, message:"schema is `false`: nothing satisfies this location"}); return; }
+    if (schema === null || typeof schema !== "object"){
+      errors.push({path, message:"invalid schema node (expected object or boolean)"});
+      return;
+    }
+
+    if (schema.$ref !== undefined){
+      let resolved;
+      try { resolved = resolveRef(schema.$ref, root); }
+      catch(e){ errors.push({path, message: e.message}); return; }
+      validate(resolved, instance, path, root, errors);
+    }
+
+    const actual = typeOf(instance);
+
+    if (schema.type !== undefined){
+      const decl = Array.isArray(schema.type) ? schema.type : [schema.type];
+      if (!decl.some(d => typeMatches(d, actual))){
+        errors.push({path, message:"type mismatch: expected " + decl.join(" or ") + ", got " + actual});
+      }
+    }
+
+    if (schema.enum !== undefined){
+      if (!schema.enum.some(e => deepEqual(e, instance))){
+        errors.push({path, message:"value is not one of the allowed enum values"});
+      }
+    }
+
+    if (schema.const !== undefined){
+      if (!deepEqual(schema.const, instance)){
+        errors.push({path, message:"value does not equal the required const"});
+      }
+    }
+
+    if (actual === "object"){
+      const props = schema.properties || {};
+      if (Array.isArray(schema.required)){
+        for (const req of schema.required){
+          if (!Object.prototype.hasOwnProperty.call(instance, req)){
+            errors.push({path, message:"missing required property '" + req + "'"});
+          }
+        }
+      }
+      for (const key of Object.keys(instance)){
+        if (Object.prototype.hasOwnProperty.call(props, key)){
+          validate(props[key], instance[key], path + "/" + key, root, errors);
+        }
+      }
+      if (schema.patternProperties){
+        for (const pat of Object.keys(schema.patternProperties)){
+          let re;
+          try { re = new RegExp(pat); } catch(e){ continue; }
+          for (const key of Object.keys(instance)){
+            if (re.test(key)){
+              validate(schema.patternProperties[pat], instance[key], path + "/" + key, root, errors);
+            }
+          }
+        }
+      }
+      if (schema.additionalProperties !== undefined){
+        const patKeys = schema.patternProperties ? Object.keys(schema.patternProperties).map(p => { try { return new RegExp(p); } catch(e){ return null; } }) : [];
+        for (const key of Object.keys(instance)){
+          const declared = Object.prototype.hasOwnProperty.call(props, key);
+          const matchedPattern = patKeys.some(re => re && re.test(key));
+          if (!declared && !matchedPattern){
+            if (schema.additionalProperties === false){
+              errors.push({path: path + "/" + key, message:"unexpected property '" + key + "' (additionalProperties: false)"});
+            } else if (typeof schema.additionalProperties === "object"){
+              validate(schema.additionalProperties, instance[key], path + "/" + key, root, errors);
+            }
+          }
+        }
+      }
+      if (typeof schema.minProperties === "number" && Object.keys(instance).length < schema.minProperties){
+        errors.push({path, message:"object has fewer than minProperties=" + schema.minProperties});
+      }
+      if (typeof schema.maxProperties === "number" && Object.keys(instance).length > schema.maxProperties){
+        errors.push({path, message:"object has more than maxProperties=" + schema.maxProperties});
+      }
+    }
+
+    if (actual === "array"){
+      if (Array.isArray(schema.items)){
+        instance.forEach((item, i) => {
+          if (i < schema.items.length){
+            validate(schema.items[i], item, path + "[" + i + "]", root, errors);
+          } else if (schema.additionalItems === false){
+            errors.push({path: path + "[" + i + "]", message:"unexpected extra tuple item (additionalItems: false)"});
+          } else if (typeof schema.additionalItems === "object"){
+            validate(schema.additionalItems, item, path + "[" + i + "]", root, errors);
+          }
+        });
+      } else if (schema.items !== undefined){
+        instance.forEach((item, i) => validate(schema.items, item, path + "[" + i + "]", root, errors));
+      }
+      if (typeof schema.minItems === "number" && instance.length < schema.minItems){
+        errors.push({path, message:"array has fewer than minItems=" + schema.minItems});
+      }
+      if (typeof schema.maxItems === "number" && instance.length > schema.maxItems){
+        errors.push({path, message:"array has more than maxItems=" + schema.maxItems});
+      }
+      if (schema.uniqueItems){
+        const seen = [];
+        for (const item of instance){
+          if (seen.some(s => deepEqual(s, item))){
+            errors.push({path, message:"array elements must be unique (uniqueItems: true)"});
+            break;
+          }
+          seen.push(item);
+        }
+      }
+    }
+
+    if (actual === "string"){
+      if (typeof schema.minLength === "number" && instance.length < schema.minLength){
+        errors.push({path, message:"string shorter than minLength=" + schema.minLength});
+      }
+      if (typeof schema.maxLength === "number" && instance.length > schema.maxLength){
+        errors.push({path, message:"string longer than maxLength=" + schema.maxLength});
+      }
+      if (schema.pattern){
+        let re;
+        try { re = new RegExp(schema.pattern); }
+        catch(e){ errors.push({path, message:"schema pattern is not a valid regex: " + schema.pattern}); re = null; }
+        if (re && !re.test(instance)){
+          errors.push({path, message:"string does not match pattern " + schema.pattern});
+        }
+      }
+      if (schema.format && FORMAT_RE[schema.format]){
+        if (!FORMAT_RE[schema.format].test(instance)){
+          errors.push({path, message:"string does not look like format '" + schema.format + "' (best-effort check)"});
+        }
+      }
+    }
+
+    if (actual === "integer" || actual === "number"){
+      if (typeof schema.minimum === "number" && instance < schema.minimum){
+        errors.push({path, message:"value " + instance + " is below minimum=" + schema.minimum});
+      }
+      if (typeof schema.maximum === "number" && instance > schema.maximum){
+        errors.push({path, message:"value " + instance + " is above maximum=" + schema.maximum});
+      }
+      if (typeof schema.exclusiveMinimum === "number" && instance <= schema.exclusiveMinimum){
+        errors.push({path, message:"value " + instance + " must be > exclusiveMinimum=" + schema.exclusiveMinimum});
+      }
+      if (typeof schema.exclusiveMaximum === "number" && instance >= schema.exclusiveMaximum){
+        errors.push({path, message:"value " + instance + " must be < exclusiveMaximum=" + schema.exclusiveMaximum});
+      }
+      if (typeof schema.multipleOf === "number" && schema.multipleOf > 0){
+        const ratio = instance / schema.multipleOf;
+        if (Math.abs(ratio - Math.round(ratio)) > 1e-9){
+          errors.push({path, message:"value " + instance + " is not a multiple of " + schema.multipleOf});
+        }
+      }
+    }
+
+    if (Array.isArray(schema.allOf)){
+      schema.allOf.forEach((sub, i) => validate(sub, instance, path, root, errors));
+    }
+    if (Array.isArray(schema.anyOf)){
+      const anyPass = schema.anyOf.some(sub => {
+        const e2 = [];
+        validate(sub, instance, path, root, e2);
+        return e2.length === 0;
+      });
+      if (!anyPass){
+        errors.push({path, message:"value does not match any schema in anyOf (" + schema.anyOf.length + " alternatives tried)"});
+      }
+    }
+    if (Array.isArray(schema.oneOf)){
+      const passCount = schema.oneOf.filter(sub => {
+        const e2 = [];
+        validate(sub, instance, path, root, e2);
+        return e2.length === 0;
+      }).length;
+      if (passCount !== 1){
+        errors.push({path, message:"value matched " + passCount + " of " + schema.oneOf.length + " oneOf alternatives (exactly 1 required)"});
+      }
+    }
+    if (schema.not !== undefined){
+      const e2 = [];
+      validate(schema.not, instance, path, root, e2);
+      if (e2.length === 0){
+        errors.push({path, message:"value matches the schema under 'not', which is forbidden"});
+      }
+    }
+  }
+
+  function runValidation(schema, instance){
+    const errors = [];
+    try {
+      validate(schema, instance, "$", schema, errors);
+    } catch(e){
+      errors.push({path:"$", message:"validator error: " + e.message});
+    }
+    return errors;
+  }
+
+  /* ---------- example data ---------- */
+
+  const EXAMPLE_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "extracted_person",
+    "type": "object",
+    "required": ["name", "age", "email", "tags"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1 },
+      "age": { "type": "integer", "minimum": 0, "maximum": 130 },
+      "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" },
+      "tags": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+      "active": { "type": "boolean" }
+    },
+    "additionalProperties": false
+  };
+
+  const EXAMPLE_CANDIDATES = [
+    {
+      name: "Run 1",
+      json: '{\n  "name": "Ada Lovelace",\n  "age": 36,\n  "email": "ada@example.com",\n  "tags": ["mathematician", "programmer"],\n  "active": true\n}'
+    },
+    {
+      name: "Run 2 (tampered)",
+      json: '{\n  "name": "Ada Lovelace",\n  "age": "36",\n  "email": "ada AT example.com",\n  "tags": [],\n  "extra_field": "oops"\n}'
+    },
+    {
+      name: "Run 3 (reformatted, same content as Run 1)",
+      json: '{"email":"ada@example.com","name":"Ada Lovelace","tags":["mathematician","programmer"],"age":36,"active":true}'
+    },
+    {
+      name: "Run 4 (valid, but actually different)",
+      json: '{\n  "name": "Ada Lovelace",\n  "age": 37,\n  "email": "ada@example.com",\n  "tags": ["mathematician"],\n  "active": false\n}'
+    }
+  ];
+
+  /* ---------- UI wiring ---------- */
+
+  const schemaInput = document.getElementById("schemaInput");
+  const schemaHashLine = document.getElementById("schemaHashLine");
+  const candidateList = document.getElementById("candidateList");
+  const resultsSection = document.getElementById("resultsSection");
+  const overviewEl = document.getElementById("overview");
+  const consistencyEl = document.getElementById("consistency");
+  const resultCardsEl = document.getElementById("resultCards");
+  const toastEl = document.getElementById("toast");
+
+  let candidateSeq = 0;
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toastEl.classList.remove("show"), 1600);
+  }
+
+  function addCandidate(name, jsonText){
+    candidateSeq += 1;
+    const id = "cand" + candidateSeq;
+    const wrap = document.createElement("div");
+    wrap.className = "candidate";
+    wrap.dataset.id = id;
+    wrap.innerHTML =
+      '<div class="head">' +
+        '<span class="name">' + (name || ("Candidate " + candidateSeq)) + '</span>' +
+        '<button class="tiny danger removeBtn" type="button">Remove</button>' +
+      '</div>' +
+      '<textarea class="small" spellcheck="false" placeholder=\'{"...": "paste one JSON output here"}\'></textarea>';
+    candidateList.appendChild(wrap);
+    const ta = wrap.querySelector("textarea");
+    ta.value = jsonText || "";
+    wrap.querySelector(".removeBtn").addEventListener("click", () => {
+      wrap.remove();
+    });
+    return wrap;
+  }
+
+  document.getElementById("addCandidateBtn").addEventListener("click", () => {
+    addCandidate();
+  });
+
+  function loadExample(){
+    schemaInput.value = JSON.stringify(EXAMPLE_SCHEMA, null, 2);
+    candidateList.innerHTML = "";
+    candidateSeq = 0;
+    EXAMPLE_CANDIDATES.forEach(c => addCandidate(c.name, c.json));
+    updateSchemaHash();
+  }
+
+  document.getElementById("loadExampleBtn").addEventListener("click", loadExample);
+  document.getElementById("clearSchemaBtn").addEventListener("click", () => {
+    schemaInput.value = "";
+    updateSchemaHash();
+  });
+
+  let schemaHashDebounce;
+  schemaInput.addEventListener("input", () => {
+    clearTimeout(schemaHashDebounce);
+    schemaHashDebounce = setTimeout(updateSchemaHash, 250);
+  });
+
+  async function updateSchemaHash(){
+    const raw = schemaInput.value.trim();
+    if (!raw){ schemaHashLine.textContent = "contract hash: —"; return; }
+    try {
+      const parsed = JSON.parse(raw);
+      const hash = await sha256Hex(canonicalize(parsed));
+      schemaHashLine.textContent = "contract hash: sha256:" + hash;
+    } catch(e){
+      schemaHashLine.textContent = "contract hash: (invalid JSON — " + e.message + ")";
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  async function verifyAll(){
+    const schemaRaw = schemaInput.value.trim();
+    let schema;
+    try {
+      schema = JSON.parse(schemaRaw);
+    } catch(e){
+      resultsSection.style.display = "block";
+      overviewEl.innerHTML = "";
+      consistencyEl.innerHTML = "";
+      resultCardsEl.innerHTML = '<div class="violation">Contract is not valid JSON: ' + escapeHtml(e.message) + "</div>";
+      return null;
+    }
+
+    const cards = Array.from(candidateList.querySelectorAll(".candidate"));
+    if (cards.length === 0){
+      resultsSection.style.display = "block";
+      overviewEl.innerHTML = "";
+      consistencyEl.innerHTML = "";
+      resultCardsEl.innerHTML = '<div class="empty-hint">No candidates to verify. Add at least one.</div>';
+      return null;
+    }
+
+    const results = [];
+    for (const card of cards){
+      const name = card.querySelector(".name").textContent;
+      const raw = card.querySelector("textarea").value.trim();
+      let instance, parseError = null;
+      try { instance = JSON.parse(raw); }
+      catch(e){ parseError = e.message; }
+
+      if (parseError){
+        results.push({ name, raw, parseError, valid:false, errors:[], hash:null, canonical:null });
+        continue;
+      }
+
+      const errors = runValidation(schema, instance);
+      const canonical = canonicalize(instance);
+      const hash = await sha256Hex(canonical);
+      results.push({ name, raw, parseError:null, valid: errors.length === 0, errors, hash, canonical });
+    }
+
+    return results;
+  }
+
+  function renderResults(results){
+    resultsSection.style.display = "block";
+
+    const total = results.length;
+    const passCount = results.filter(r => r.valid).length;
+    const failCount = total - passCount;
+
+    overviewEl.innerHTML =
+      '<div class="stat"><div class="n">' + total + '</div><div class="l">candidates</div></div>' +
+      '<div class="stat pass"><div class="n">' + passCount + '</div><div class="l">pass schema</div></div>' +
+      '<div class="stat fail"><div class="n">' + failCount + '</div><div class="l">fail schema</div></div>';
+
+    const passing = results.filter(r => r.valid && r.hash);
+    if (passing.length <= 1){
+      consistencyEl.innerHTML = '<div class="consistency ok">Not enough passing candidates to compare for drift (need 2+).</div>';
+    } else {
+      const groups = {};
+      passing.forEach(r => { (groups[r.hash] = groups[r.hash] || []).push(r.name); });
+      const groupKeys = Object.keys(groups);
+      if (groupKeys.length === 1){
+        consistencyEl.innerHTML = '<div class="consistency ok">All ' + passing.length + ' passing candidates are canonically identical — same answer, every run (hash <span class="hashline" style="display:inline">' + groupKeys[0].slice(0,16) + '…</span>).</div>';
+      } else {
+        let html = '<div class="consistency drift">Passing candidates diverge: ' + groupKeys.length + ' distinct canonical forms across ' + passing.length + ' passing candidates. This is real content drift between runs, not just formatting.';
+        groupKeys.forEach((h,i) => {
+          html += '<div class="group">group ' + (i+1) + ' (sha256:' + h.slice(0,16) + '…): ' + groups[h].join(", ") + '</div>';
+        });
+        html += '</div>';
+        consistencyEl.innerHTML = html;
+      }
+    }
+
+    resultCardsEl.innerHTML = "";
+    results.forEach(r => {
+      const card = document.createElement("div");
+      card.className = "result-card " + (r.valid ? "pass" : "fail");
+      let inner = '<div class="rhead"><span class="name">' + escapeHtml(r.name) + '</span>' +
+        '<span class="verdict-pill ' + (r.valid ? "pass" : "fail") + '">' + (r.valid ? "PASS" : "FAIL") + '</span></div>';
+
+      if (r.parseError){
+        inner += '<div class="violation"><span class="path">$</span> — not valid JSON: ' + escapeHtml(r.parseError) + '</div>';
+      } else {
+        if (r.errors.length){
+          r.errors.forEach(e => {
+            inner += '<div class="violation"><span class="path">' + escapeHtml(e.path) + '</span> — ' + escapeHtml(e.message) + '</div>';
+          });
+        }
+        inner += '<div class="hashline">sha256:' + r.hash + ' <button class="tiny ghost copyHashBtn" type="button" style="margin-left:6px;">copy</button></div>';
+        inner += '<details class="canon"><summary>canonical form</summary><pre class="canonblock">' + escapeHtml(r.canonical) + '</pre></details>';
+      }
+      card.innerHTML = inner;
+      resultCardsEl.appendChild(card);
+      const copyBtn = card.querySelector(".copyHashBtn");
+      if (copyBtn){
+        copyBtn.addEventListener("click", () => {
+          const text = "sha256:" + r.hash;
+          if (navigator.clipboard && navigator.clipboard.writeText){
+            navigator.clipboard.writeText(text).then(() => toast("Hash copied")).catch(() => toast(text));
+          } else {
+            toast(text);
+          }
+        });
+      }
+    });
+  }
+
+  document.getElementById("verifyBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("verifyBtn");
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = "Verifying…";
+    try {
+      const results = await verifyAll();
+      if (results) renderResults(results);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+    }
+  });
+
+  /* ---------- self-test: proves the core promise end-to-end on load ---------- */
+
+  async function selfTest(){
+    const checks = [];
+
+    const r1 = runValidation(EXAMPLE_SCHEMA, JSON.parse(EXAMPLE_CANDIDATES[0].json));
+    checks.push({ ok: r1.length === 0, label: "Run 1 (well-formed) passes the contract with zero violations" });
+
+    const r2 = runValidation(EXAMPLE_SCHEMA, JSON.parse(EXAMPLE_CANDIDATES[1].json));
+    const r2paths = r2.map(e => e.path).join(",");
+    checks.push({ ok: r2.length >= 3, label: "Run 2 (tampered) is caught: " + r2.length + " violations found" });
+    checks.push({ ok: r2.some(e => /age/.test(e.path) || /age/.test(e.message)), label: "Run 2 violation covers the type-tampered 'age' field" });
+    checks.push({ ok: r2.some(e => /extra_field/.test(e.path)), label: "Run 2 violation covers the unexpected 'extra_field'" });
+
+    const r3 = runValidation(EXAMPLE_SCHEMA, JSON.parse(EXAMPLE_CANDIDATES[2].json));
+    checks.push({ ok: r3.length === 0, label: "Run 3 (reformatted) also passes the contract" });
+
+    const c1 = canonicalize(JSON.parse(EXAMPLE_CANDIDATES[0].json));
+    const c3 = canonicalize(JSON.parse(EXAMPLE_CANDIDATES[2].json));
+    const h1 = await sha256Hex(c1);
+    const h3 = await sha256Hex(c3);
+    checks.push({ ok: h1 === h3, label: "Run 1 and Run 3 canonicalize to the identical hash (formatting-only difference detected correctly)" });
+
+    const r4 = runValidation(EXAMPLE_SCHEMA, JSON.parse(EXAMPLE_CANDIDATES[3].json));
+    const c4 = canonicalize(JSON.parse(EXAMPLE_CANDIDATES[3].json));
+    const h4 = await sha256Hex(c4);
+    checks.push({ ok: r4.length === 0, label: "Run 4 (valid but different content) passes the contract" });
+    checks.push({ ok: h4 !== h1, label: "Run 4's hash differs from Run 1/3 — real drift correctly distinguished from reformatting" });
+
+    // canonicalization sanity: key order must not affect the hash
+    const same = { b: 1, a: { d: 2, c: [3,2,1] } };
+    const reordered = { a: { c: [3,2,1], d: 2 }, b: 1 };
+    checks.push({ ok: canonicalize(same) === canonicalize(reordered), label: "Canonicalization is key-order independent" });
+
+    // schema-false-node sanity
+    const falseErrs = runValidation(false, {"x":1}, "$", false, []);
+    const e5 = [];
+    validate(false, {"x":1}, "$", false, e5);
+    checks.push({ ok: e5.length === 1, label: "'false' schema rejects everything, as required" });
+
+    const allOk = checks.every(c => c.ok);
+    const el = document.getElementById("selftest");
+    el.className = "selftest " + (allOk ? "pass" : "fail");
+    const passN = checks.filter(c => c.ok).length;
+    el.innerHTML =
+      '<div class="dot"></div>' +
+      '<div class="body">' +
+        '<div class="title">' + (allOk ? "All good — " : "Self-test FAILED — ") + passN + "/" + checks.length + ' checks passed</div>' +
+        '<div class="list">' + checks.map(c => '<div class="' + (c.ok ? "ok" : "bad") + '">' + escapeHtml(c.label) + '</div>').join("") + '</div>' +
+      '</div>';
+
+    return allOk;
+  }
+
+  /* ---------- boot ---------- */
+
+  loadExample();
+  selfTest();
+
+})();
+</script>
+</body>
+</html>
