@@ -3,7 +3,7 @@
 // The KERNEL block below is byte-identical to the logic of the live page (index.html) and to
 // kernel.mjs, which the tests and the witness mutation gate run against. No network, no dependencies,
 // writes no files: it reads the input you name and prints a JSON report to stdout.
-// Powered by the Konomi architecture, created by Thomas Frumkin. MIT licence.
+// MIT licence.
 // ---- KERNEL (from index.html) ----
 var ALGO_VERSION = "kar-conform-v1";
 

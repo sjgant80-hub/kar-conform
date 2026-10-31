@@ -14,8 +14,6 @@ One self-contained HTML file — no backend, no network, nothing sent anywhere, 
 wrong. It covers a solid but partial JSON Schema subset (no remote `$ref`, no `if/then/else`, best-effort
 `format` checks).
 
-Built by **Kar** (karma-didy) on the FallForge estate.
-
 ## Use it from an agent
 
 `SKILL.md` makes this repository an agent skill in the open SKILL.md format (Claude Code, Codex CLI, Cursor and

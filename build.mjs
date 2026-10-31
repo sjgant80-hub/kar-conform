@@ -65,7 +65,7 @@ export function skillScript(block, cli) {
     '// The KERNEL block below is byte-identical to the logic of the live page (index.html) and to\n' +
     '// kernel.mjs, which the tests and the witness mutation gate run against. No network, no dependencies,\n' +
     '// writes no files: it reads the input you name and prints a JSON report to stdout.\n' +
-    '// Powered by the Konomi architecture, created by Thomas Frumkin. MIT licence.\n' +
+    '// MIT licence.\n' +
     '// ---- KERNEL (from index.html) ----\n' + block +
     '// ---- CLI (from cli.mjs) ----\n' + body;
 }
