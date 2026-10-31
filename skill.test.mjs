@@ -18,7 +18,7 @@ const SCRIPT = resolve(`scripts/${NAME}.mjs`);
 const ASCII = Boolean((JSON.parse(readFileSync('package.json', 'utf8')).agensi || {}).asciiOutput);
 const serialise = (v) => {
   const s = JSON.stringify(v, null, 2);
-  return ASCII ? s.replace(/[\u007f-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) : s;
+  return ASCII ? s.replace(/[\u007f-\uFFFF]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) : s;
 };
 
 function runAlone(args, input) {
