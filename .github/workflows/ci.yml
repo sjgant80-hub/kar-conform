@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: one source of truth (live page = kernel.mjs = skill script)
+        run: node build.mjs --check
+      - name: tests (the kernel, and the shipped skill script run alone as Agensi runs it)
+        run: npm test
+      - name: the committed mutation receipt is for this kernel and these tests
+        run: node gate.mjs --verify
+      - name: Agensi ZIP (package rules checked, SHA-256 printed)
+        run: node make-zip.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agensi-zip
+          path: dist/*.zip
+  witness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: witness v0.6 mutation gate on the kernel (every mutant)
+        uses: sjgant80-hub/witness@v0.6
+        with:
+          files: kernel.mjs
+          test-command: node --test kernel.test.mjs
+          cap: 100000
+          node-version: 20
+          fuzz: kernel.mjs:runValidation kernel.mjs:deepEqual kernel.mjs:typeOf

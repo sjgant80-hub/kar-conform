@@ -1,0 +1,31 @@
+{
+ "kind": "kar-conform.witness",
+ "v": 1,
+ "witness": {
+  "tag": "v0.6",
+  "commit": "f04fe3047e3d49b98c67713befd5b77182afa0d4",
+  "sha256": "9918297aa5f8fc4e1d26d9e6b25226f56102fdc04f0c634155bfcba1c086ef48"
+ },
+ "kernel": "kernel.mjs",
+ "kernelSha256": "9fe8c3a532e367cb4ae413eb0631ea07417675086369bd8a7841baa37e1ba085",
+ "tests": "node --test kernel.test.mjs",
+ "testsSha256": "827fba7c27ee4b2d1bc0cd0224a4460704fec94843a8914f5ff0c5d529a504f9",
+ "node": "v25.7.0",
+ "platform": "win32",
+ "total": 95,
+ "killed": 94,
+ "survived": [],
+ "ignored": [
+  {
+   "line": 227,
+   "mutation": "> → >=",
+   "snippet": "if (typeof schema.multipleOf === \"number\" && schema.multipleOf > 0){",
+   "reason": "Equivalent, and checked rather than argued. The mutant only differs when multipleOf is 0 (or -0). It then divides by zero: the ratio is +/-Infinity, or NaN for 0/0, so Math.abs(ratio - Math.round(ratio)) is NaN and NaN > 1e-9 is false, so no violation is pushed, exactly as when the original skips the check. Verified by differential run: multipleOf 0 and -0 against 20,012 instances (0, -0, +/-1, 1.5, 1e308, -1e308, MAX_SAFE_INTEGER, 5e-324 and 20,000 random values from 1e-10 to 1e9): identical outcome every time."
+  }
+ ],
+ "capped": false,
+ "timeoutMs": 60000,
+ "clean": true,
+ "seconds": 165,
+ "rerun": "git clone https://github.com/sjgant80-hub/witness && git -C witness checkout v0.6 && node gate.mjs --witness witness/witness.mjs"
+}

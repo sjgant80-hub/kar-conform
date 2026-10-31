@@ -1,0 +1,16 @@
+{
+  "name": "kar-conform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic JSON Schema conformance for AI structured output, no LLM judge: PASS/FAIL with violation paths and a canonical hash per output to tell reformatting from drift.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test kernel.test.mjs skill.test.mjs cli.test.mjs",
+    "zip": "node make-zip.mjs",
+    "gate": "node gate.mjs --witness ../witness/witness.mjs",
+    "verify-receipt": "node gate.mjs --verify"
+  }
+}

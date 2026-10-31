@@ -1,0 +1,21 @@
+{
+  "schema": {
+    "title": "extracted_person",
+    "type": "object",
+    "required": ["name", "age", "email", "tags"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1 },
+      "age": { "type": "integer", "minimum": 0, "maximum": 130 },
+      "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" },
+      "tags": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+      "active": { "type": "boolean" }
+    },
+    "additionalProperties": false
+  },
+  "outputs": [
+    { "name": "Run 1", "json": "{\n  \"name\": \"Ada Lovelace\",\n  \"age\": 36,\n  \"email\": \"ada@example.com\",\n  \"tags\": [\"mathematician\", \"programmer\"],\n  \"active\": true\n}" },
+    { "name": "Run 2 (tampered)", "json": "{\n  \"name\": \"Ada Lovelace\",\n  \"age\": \"36\",\n  \"email\": \"ada AT example.com\",\n  \"tags\": [],\n  \"extra_field\": \"oops\"\n}" },
+    { "name": "Run 3 (reformatted, same content as Run 1)", "json": "{\"email\":\"ada@example.com\",\"name\":\"Ada Lovelace\",\"tags\":[\"mathematician\",\"programmer\"],\"age\":36,\"active\":true}" },
+    { "name": "Run 4 (valid, but actually different)", "json": "{\n  \"name\": \"Ada Lovelace\",\n  \"age\": 37,\n  \"email\": \"ada@example.com\",\n  \"tags\": [\"mathematician\"],\n  \"active\": false\n}" }
+  ]
+}

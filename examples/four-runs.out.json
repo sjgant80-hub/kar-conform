@@ -1,0 +1,75 @@
+{
+  "exitCode": 1,
+  "report": {
+    "tool": "kar-conform",
+    "algorithm": "kar-conform-v1",
+    "verdict": "SOME_FAIL",
+    "schemaSha256": "09a59c5f050f8aeaa0c7186dc08d9594ea3217da14389670d94285cebfd3d8af",
+    "results": [
+      {
+        "name": "Run 1",
+        "verdict": "PASS",
+        "errors": [],
+        "sha256": "54e8eda18d5d980e85907e300e230a88e44cf4a20cfe32fa94b172f13bf6aed9",
+        "canonical": "{\"active\":true,\"age\":36,\"email\":\"ada@example.com\",\"name\":\"Ada Lovelace\",\"tags\":[\"mathematician\",\"programmer\"]}"
+      },
+      {
+        "name": "Run 2 (tampered)",
+        "verdict": "FAIL",
+        "errors": [
+          {
+            "path": "$/age",
+            "message": "type mismatch: expected integer, got string"
+          },
+          {
+            "path": "$/email",
+            "message": "string does not match pattern ^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+          },
+          {
+            "path": "$/tags",
+            "message": "array has fewer than minItems=1"
+          },
+          {
+            "path": "$/extra_field",
+            "message": "unexpected property 'extra_field' (additionalProperties: false)"
+          }
+        ],
+        "sha256": "cc04229befaf8afda0ab2711ca48a9522456984d38b899ee4de514a400a5e0ce",
+        "canonical": "{\"age\":\"36\",\"email\":\"ada AT example.com\",\"extra_field\":\"oops\",\"name\":\"Ada Lovelace\",\"tags\":[]}"
+      },
+      {
+        "name": "Run 3 (reformatted, same content as Run 1)",
+        "verdict": "PASS",
+        "errors": [],
+        "sha256": "54e8eda18d5d980e85907e300e230a88e44cf4a20cfe32fa94b172f13bf6aed9",
+        "canonical": "{\"active\":true,\"age\":36,\"email\":\"ada@example.com\",\"name\":\"Ada Lovelace\",\"tags\":[\"mathematician\",\"programmer\"]}"
+      },
+      {
+        "name": "Run 4 (valid, but actually different)",
+        "verdict": "PASS",
+        "errors": [],
+        "sha256": "0c52d07ea6074f5ab0b86ef984ad088da1391894e1665365df61ce8a045e5aec",
+        "canonical": "{\"active\":false,\"age\":37,\"email\":\"ada@example.com\",\"name\":\"Ada Lovelace\",\"tags\":[\"mathematician\"]}"
+      }
+    ],
+    "consistency": {
+      "passing": 3,
+      "comparable": true,
+      "groups": [
+        {
+          "hash": "54e8eda18d5d980e85907e300e230a88e44cf4a20cfe32fa94b172f13bf6aed9",
+          "names": [
+            "Run 1",
+            "Run 3 (reformatted, same content as Run 1)"
+          ]
+        },
+        {
+          "hash": "0c52d07ea6074f5ab0b86ef984ad088da1391894e1665365df61ce8a045e5aec",
+          "names": [
+            "Run 4 (valid, but actually different)"
+          ]
+        }
+      ]
+    }
+  }
+}
