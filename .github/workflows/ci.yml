@@ -17,6 +17,8 @@ jobs:
         run: node build.mjs --check
       - name: tests (the kernel, and the shipped skill script run alone as Agensi runs it)
         run: npm test
+      - name: the cost case kernel (checkcase.mjs) and its sourced basis
+        run: node --test checkcase.test.mjs
       - name: the committed mutation receipt is for this kernel and these tests
         run: node gate.mjs --verify
       - name: Agensi ZIP (package rules checked, SHA-256 printed)
@@ -37,3 +39,15 @@ jobs:
           cap: 100000
           node-version: 20
           fuzz: kernel.mjs:runValidation kernel.mjs:deepEqual kernel.mjs:typeOf
+  witness-checkcase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: witness v0.6 mutation gate on the cost case kernel (every mutant)
+        uses: sjgant80-hub/witness@v0.6
+        with:
+          files: checkcase.mjs
+          test-command: node --test checkcase.test.mjs
+          cap: 100000
+          node-version: 20
+          fuzz: checkcase.mjs:checkCase checkcase.mjs:figures
