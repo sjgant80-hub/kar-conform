@@ -16,7 +16,7 @@ async function gate() {
     const r = await getJSON('receipts/witness.json');
     const ign = Array.isArray(r.ignored) ? r.ignored.length : 0, surv = Array.isArray(r.survived) ? r.survived.length : 0;
     out.textContent = r.killed + ' of ' + r.total + ' deliberate changes to kernel.mjs were caught by its tests'
-      + (ign ? ', ' + ign + ' reviewed as equivalent, each with a written reason' : '') + ', ' + surv + ' survived'
+      + (ign ? ', ' + ign + ' reviewed as equivalent, ' + (ign === 1 ? 'with a written reason' : 'each with a written reason') : '') + ', ' + surv + ' survived'
       + (r.capped ? ' (CAPPED: not every change was tried)' : ', every change tried') + '. witness ' + (r.witness && r.witness.tag)
       + ', kernel SHA-256 ' + String(r.kernelSha256).slice(0, 12) + '…';
   } catch { out.textContent = 'The gate receipt could not be read; open receipts/witness.json directly.'; }
@@ -50,7 +50,7 @@ async function costCase() {
     const p = $('ex-sources'); p.replaceChildren(document.createTextNode('Sources: '));
     sourcesOf(BASIS).forEach((x, i) => {
       if (i) p.append(document.createTextNode('; '));
-      const a = el('a', x.what); a.href = x.source; p.append(a, document.createTextNode(' (' + x.value + (x.unit ? ' ' + x.unit : '') + ')'));
+      const a = el('a', String(x.what).split(' — ')[0]); a.href = x.source; p.append(a, document.createTextNode(' (' + x.value + (x.unit ? ' ' + x.unit : '') + ')'));
     });
     run();
   } catch { $('ex-why').textContent = 'The sourced basis could not be read, so no figure is shown.'; }
