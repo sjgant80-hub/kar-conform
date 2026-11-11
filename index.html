@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>kar-conform — deterministic structured-output verifier</title>
-<meta name="description" content="Paste a JSON Schema contract and one or more AI-generated JSON outputs. Get a deterministic, third-party re-runnable PASS/FAIL per output plus a canonical hash that catches silent drift between runs. No LLM judge.">
+<meta name="description" content="Paste a JSON Schema contract and one or more AI-generated JSON outputs. Get a deterministic, third-party re-runnable PASS/FAIL per output plus a canonical hash that catches silent drift between runs. No AI judge.">
 <style>
   :root{
     --bg:#0b0d12;
@@ -425,7 +425,7 @@
     <p class="tag">Paste a JSON Schema contract and one or more JSON outputs an AI tool produced. Get a deterministic PASS/FAIL per output — exact violation, exact path — plus a canonical SHA-256 hash so you can tell "reformatted the same answer" apart from "quietly changed the answer" across reruns. Everything runs in your browser; nothing is sent anywhere; the same inputs always produce the same verdict, on this page or anyone else's copy of it.</p>
     <div class="badgebar">
       <span class="badge">no network calls</span>
-      <span class="badge">no LLM judge</span>
+      <span class="badge">no AI judge</span>
       <span class="badge">deterministic</span>
       <span class="badge">third-party re-runnable</span>
       <span class="badge">works offline</span>
@@ -625,7 +625,7 @@
 <!-- ⟦EXPLAIN-REST-END⟧ -->
 
   <footer>
-    kar-conform — one sovereign HTML file, no server, no account. Re-run it, fork it, or read the algorithm above and reimplement it in any language — the verdict does not depend on trusting this page.<br>
+    kar-conform — one HTML file, no server, no account. Re-run it, fork it, or read the algorithm above and reimplement it in any language — the verdict does not depend on trusting this page.<br>
     Agents can run the same check: <a href="https://github.com/sjgant80-hub/kar-conform">source, agent skill and mutation receipt</a>.
     Powered by the Konomi architecture, created by Thomas Frumkin.
   </footer>
