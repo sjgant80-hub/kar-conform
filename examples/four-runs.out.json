@@ -2,7 +2,7 @@
   "exitCode": 1,
   "report": {
     "tool": "kar-conform",
-    "algorithm": "kar-conform-v1",
+    "algorithm": "kar-conform-v2",
     "verdict": "SOME_FAIL",
     "schemaSha256": "09a59c5f050f8aeaa0c7186dc08d9594ea3217da14389670d94285cebfd3d8af",
     "results": [

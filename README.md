@@ -11,8 +11,9 @@ canonicalization + hashing algorithm — anyone can re-derive the same hash inde
 One self-contained HTML file — no backend, no network, nothing sent anywhere, runs in your browser.
 
 **Honest limit:** it verifies *shape, not truth* — a model can satisfy the schema and still be factually
-wrong. It covers a solid but partial JSON Schema subset (no remote `$ref`, no `if/then/else`, best-effort
-`format` checks).
+wrong. It checks the common JSON Schema rules, not all of them, and a schema using a rule it does not check (`if/then/else`,
+`prefixItems`, a remote `$ref`, …) FAILS every output with the rule named, instead of passing quietly (version 1
+skipped them). `format` checks are best-effort patterns.
 
 ## Use it from an agent
 
@@ -31,8 +32,8 @@ upload for the Agensi skill marketplace. CI builds the same ZIP on every push an
   byte-for-byte into `kernel.mjs` and into the skill script; CI fails if the three ever differ.
 - **Tests:** `npm test` runs the kernel tests, and runs the skill script alone in an empty folder, the way
   Agensi runs it, against the expected outputs in `examples/`.
-- **Mutation gate:** witness v0.6 made 95 single-operator mutants of `kernel.mjs` and the tests caught
-  94; the other 1 is an equivalent mutant, reasons in `witness.baseline.json`. Receipt: `receipts/witness.json` (kernel SHA-256 `9fe8c3a532e367cb…`).
+- **Mutation gate:** witness v0.6 made 106 single-operator mutants of `kernel.mjs` and the tests caught
+  105; the other 1 is an equivalent mutant, reasons in `witness.baseline.json`. Receipt: `receipts/witness.json` (kernel SHA-256 `70e193e058b40fbc…`).
   CI re-runs the gate on every push: https://github.com/sjgant80-hub/kar-conform/actions/workflows/ci.yml
 
 Powered by the Konomi architecture, created by Thomas Frumkin. MIT licence (see `LICENSE`).

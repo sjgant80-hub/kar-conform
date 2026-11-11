@@ -5,13 +5,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ALGO_VERSION, canonicalize, sha256Hex, deepEqual, typeOf, typeMatches, resolveRef, FORMAT_RE, validate, runValidation,
-  checkCandidates, consistencyOf,
+  checkCandidates, consistencyOf, CHECKED_KEYWORDS, ANNOTATION_KEYWORDS, unsupportedKeywords,
 } from './kernel.mjs';
 
 const errs = (schema, instance) => runValidation(schema, instance).map((e) => `${e.path}: ${e.message}`);
 const ok = (schema, instance) => assert.deepEqual(errs(schema, instance), [], JSON.stringify({ schema, instance }));
 
-test('the algorithm name', () => assert.equal(ALGO_VERSION, 'kar-conform-v1'));
+test('the algorithm name', () => assert.equal(ALGO_VERSION, 'kar-conform-v2'));
 
 test('canonicalize: every JSON type; keys sorted; -0 is 0; non-JSON refused', () => {
   assert.equal(canonicalize(null), 'null');
@@ -72,7 +72,25 @@ test('$ref: followed, and an unresolvable one is a violation at its path', () =>
   const schema = { $defs: { id: { type: 'integer' } }, properties: { a: { $ref: '#/$defs/id' } } };
   ok(schema, { a: 3 });
   assert.deepEqual(errs(schema, { a: 'x' }), ['$/a: type mismatch: expected integer, got string']);
-  assert.deepEqual(errs({ $ref: '#/nope' }, 1), ['$: cannot resolve $ref #/nope']);
+  const cannot = (msg, at) => '$: ' + msg + ' (at ' + at + '): this tool cannot follow it, so it fails the output';
+  assert.deepEqual(errs({ $ref: '#/nope' }, 1), [cannot('cannot resolve $ref #/nope', '#')]);
+  // validate() itself still reports a ref it cannot follow, at the instance path, for callers that skip runValidation
+  const e = [];
+  validate({ properties: { a: { $ref: '#/nope' } } }, { a: 1 }, '$', {}, e);
+  assert.deepEqual(e, [{ path: '$/a', message: 'cannot resolve $ref #/nope' }]);
+});
+
+test('$ref it cannot follow: refused up front, so one inside not or oneOf can no longer pass (v1 passed it)', () => {
+  const cannot = (msg, at) => '$: ' + msg + ' (at ' + at + '): this tool cannot follow it, so it fails the output';
+  assert.deepEqual(errs({ not: { $ref: 'https://example.com/s.json' } }, { a: 1 }),
+    [cannot("unsupported $ref (only local '#/...' refs are supported): https://example.com/s.json", '#/not')]);
+  assert.deepEqual(errs({ not: { $ref: '#/$defs/missing' } }, { a: 1 }), [cannot('cannot resolve $ref #/$defs/missing', '#/not')]);
+  assert.deepEqual(errs({ oneOf: [{ type: 'integer' }, { $ref: '#/x' }] }, 1), [cannot('cannot resolve $ref #/x', '#/oneOf/1')]);
+  assert.deepEqual(errs({ properties: { a: { $ref: 5 } } }, {}), [cannot("unsupported $ref (only local '#/...' refs are supported): 5", '#/properties/a')]);
+  // a ref that resolves is followed as before, from the root it was given
+  ok({ $defs: { n: { type: 'integer' } }, not: { $ref: '#/$defs/n' }, type: 'string' }, 'x');
+  assert.deepEqual(unsupportedKeywords({ $ref: '#/$defs/n' }, '#', [], { $defs: { n: {} } }), []);
+  assert.equal(unsupportedKeywords({ $ref: '#/$defs/n' }, '#', [], {}).length, 1);
 });
 
 test('type: one type or a list; number accepts integers', () => {
@@ -186,6 +204,62 @@ test('allOf, anyOf, oneOf, not', () => {
   assert.deepEqual(errs({ oneOf: [{ type: 'string' }] }, 3), ['$: value matched 0 of 1 oneOf alternatives (exactly 1 required)']);
   assert.deepEqual(errs({ not: { type: 'integer' } }, 3), ["$: value matches the schema under 'not', which is forbidden"]);
   ok({ not: { type: 'string' } }, 3);
+});
+
+const refused = (k, at) => "$: unsupported schema keyword '" + k + "' at " + at + ": this tool does not check it, so it fails the output rather than pass a rule it never checked";
+
+test('unsupported keywords: the lists are exact, and every keyword on them is accepted', () => {
+  assert.deepEqual(CHECKED_KEYWORDS, ['$ref', 'type', 'enum', 'const', 'required', 'properties', 'patternProperties', 'additionalProperties',
+    'minProperties', 'maxProperties', 'items', 'additionalItems', 'minItems', 'maxItems', 'uniqueItems', 'minLength', 'maxLength',
+    'pattern', 'format', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'allOf', 'anyOf', 'oneOf', 'not']);
+  assert.deepEqual(ANNOTATION_KEYWORDS, ['$schema', '$id', '$defs', 'definitions', '$comment', '$anchor', 'title', 'description', 'default',
+    'examples', 'deprecated', 'readOnly', 'writeOnly', 'contentMediaType', 'contentEncoding']);
+  for (const k of [...CHECKED_KEYWORDS, ...ANNOTATION_KEYWORDS]) assert.deepEqual(unsupportedKeywords({ [k]: k === '$ref' ? '#' : true }, '#', [], {}), [], k);
+  // the first entry of each list too (an off-by-one on indexOf would refuse exactly these)
+  assert.deepEqual(unsupportedKeywords({ $ref: '#', $schema: 'x' }, '#', [], {}), []);
+});
+
+test('unsupported keywords: v1 passed an output that broke an if/then rule; v2 refuses the schema', () => {
+  const schema = { type: 'object', if: { properties: { a: { const: 1 } } }, then: { required: ['b'] } };
+  assert.deepEqual(errs(schema, { a: 1 }), [refused('if', '#'), refused('then', '#')]);
+  // the refusal is all it reports: the rules it does check are not run on a schema it cannot finish
+  assert.deepEqual(errs({ type: 'string', prefixItems: [] }, 5), [refused('prefixItems', '#')]);
+  for (const k of ['else', 'dependentRequired', 'dependentSchemas', 'unevaluatedProperties', 'contains', 'propertyNames', 'nullable', '$dynamicRef']) {
+    assert.deepEqual(errs({ [k]: {} }, {}), [refused(k, '#')], k);
+  }
+  ok({ $schema: 'https://json-schema.org/draft/2020-12/schema', title: 't', description: 'd', type: 'object' }, {});
+});
+
+test('unsupported keywords: found anywhere in the schema, at their schema path, even inside not and oneOf', () => {
+  const at = (schema) => unsupportedKeywords(schema, '#', []).map((e) => e.message.split(' at ')[1].split(':')[0]);
+  const X = { if: {} };
+  assert.deepEqual(at({ properties: { p: X } }), ['#/properties/p']);
+  assert.deepEqual(at({ patternProperties: { '^a': X } }), ['#/patternProperties/^a']);
+  assert.deepEqual(at({ $defs: { d: X } }), ['#/$defs/d']);
+  assert.deepEqual(at({ definitions: { d: X } }), ['#/definitions/d']);
+  assert.deepEqual(at({ additionalProperties: X }), ['#/additionalProperties']);
+  assert.deepEqual(at({ additionalItems: X }), ['#/additionalItems']);
+  assert.deepEqual(at({ not: X }), ['#/not']);
+  assert.deepEqual(at({ items: X }), ['#/items']);
+  assert.deepEqual(at({ items: [{}, X] }), ['#/items/1']);
+  assert.deepEqual(at({ allOf: [X] }), ['#/allOf/0']);
+  assert.deepEqual(at({ anyOf: [{}, X] }), ['#/anyOf/1']);
+  assert.deepEqual(at({ oneOf: [{}, {}, X] }), ['#/oneOf/2']);
+  assert.deepEqual(at({ properties: { a: { items: { not: X } } } }), ['#/properties/a/items/not']);
+  // inside not, a refusal must not flip into a pass
+  assert.deepEqual(errs({ not: X }, 1), [refused('if', '#/not')]);
+  assert.deepEqual(errs({ oneOf: [{ type: 'integer' }, { type: 'integer', if: {} }] }, 1), [refused('if', '#/oneOf/1')]);
+});
+
+test('unsupported keywords: anything that is not a schema object is skipped, never a throw', () => {
+  for (const s of [null, undefined, 5, 'x', true, [{ if: {} }]]) assert.deepEqual(unsupportedKeywords(s, '#', []), [], String(s));
+  for (const k of ['properties', 'patternProperties', '$defs', 'definitions']) {
+    assert.deepEqual(unsupportedKeywords({ [k]: null }, '#', []), [], k + ' null');
+    assert.deepEqual(unsupportedKeywords({ [k]: [{ if: {} }] }, '#', []), [], k + ' array');
+  }
+  assert.deepEqual(unsupportedKeywords({ allOf: { if: {} } }, '#', []), []);
+  const out = [];
+  assert.equal(unsupportedKeywords({ if: 1 }, '#', out), out);   // it appends to the list it was given
 });
 
 test('runValidation: a validator error becomes a violation, never a throw', () => {

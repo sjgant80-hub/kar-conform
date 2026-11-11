@@ -5,7 +5,7 @@
 // writes no files: it reads the input you name and prints a JSON report to stdout.
 // MIT licence.
 // ---- KERNEL (from index.html) ----
-var ALGO_VERSION = "kar-conform-v1";
+var ALGO_VERSION = "kar-conform-v2";
 
 /* ---------- canonical JSON + hashing ---------- */
 
@@ -91,7 +91,9 @@ function validate(schema, instance, path, root, errors){
   if (schema.$ref !== undefined){
     let resolved;
     try { resolved = resolveRef(schema.$ref, root); }
-    catch(e){ errors.push({path, message: e.message}); return; }
+    // running out of stack (a schema that refers to itself forever) is not a bad ref: let runValidation report it,
+    // so the same schema gives the same message on every run, wherever the stack happens to run out
+    catch(e){ if (e instanceof RangeError) throw e; errors.push({path, message: e.message}); return; }
     validate(resolved, instance, path, root, errors);
   }
 
@@ -270,9 +272,45 @@ function validate(schema, instance, path, root, errors){
   }
 }
 
+// Every keyword validate() checks, and the annotation keywords that carry no rule. Anything else in a schema is a
+// rule this tool cannot check, so runValidation refuses the whole schema rather than pass an output against a rule
+// it never looked at. v1 skipped them silently: an output that broke an if/then rule still came back PASS. The
+// walk is up front, over the whole schema, because a refusal inside not or oneOf would otherwise flip into a pass.
+// The same goes for a $ref it cannot follow (a URL, or a local name that is not there): v1 let one inside not pass.
+const CHECKED_KEYWORDS = ["$ref", "type", "enum", "const", "required", "properties", "patternProperties", "additionalProperties",
+  "minProperties", "maxProperties", "items", "additionalItems", "minItems", "maxItems", "uniqueItems", "minLength", "maxLength",
+  "pattern", "format", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "allOf", "anyOf", "oneOf", "not"];
+const ANNOTATION_KEYWORDS = ["$schema", "$id", "$defs", "definitions", "$comment", "$anchor", "title", "description", "default",
+  "examples", "deprecated", "readOnly", "writeOnly", "contentMediaType", "contentEncoding"];
+function unsupportedKeywords(schema, at, out, root){
+  if (schema === null || typeof schema !== "object" || Array.isArray(schema)) return out;
+  if (schema.$ref !== undefined){
+    try { resolveRef(schema.$ref, root); }
+    catch(e){ out.push({path:"$", message: e.message + " (at " + at + "): this tool cannot follow it, so it fails the output"}); }
+  }
+  for (const k of Object.keys(schema)){
+    if (CHECKED_KEYWORDS.indexOf(k) < 0 && ANNOTATION_KEYWORDS.indexOf(k) < 0){
+      out.push({path:"$", message:"unsupported schema keyword '" + k + "' at " + at + ": this tool does not check it, so it fails the output rather than pass a rule it never checked"});
+    }
+  }
+  for (const k of ["properties", "patternProperties", "$defs", "definitions"]){
+    const m = schema[k];
+    if (m && typeof m === "object" && !Array.isArray(m)) for (const name of Object.keys(m)) unsupportedKeywords(m[name], at + "/" + k + "/" + name, out, root);
+  }
+  for (const k of ["additionalProperties", "additionalItems", "not"]) unsupportedKeywords(schema[k], at + "/" + k, out, root);
+  if (Array.isArray(schema.items)) schema.items.forEach(function(s, i){ unsupportedKeywords(s, at + "/items/" + i, out, root); });
+  else unsupportedKeywords(schema.items, at + "/items", out, root);
+  for (const k of ["allOf", "anyOf", "oneOf"]){
+    if (Array.isArray(schema[k])) schema[k].forEach(function(s, i){ unsupportedKeywords(s, at + "/" + k + "/" + i, out, root); });
+  }
+  return out;
+}
+
 function runValidation(schema, instance){
   const errors = [];
   try {
+    unsupportedKeywords(schema, "#", errors, schema);
+    if (errors.length) return errors;
     validate(schema, instance, "$", schema, errors);
   } catch(e){
     errors.push({path:"$", message:"validator error: " + e.message});

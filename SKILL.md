@@ -64,7 +64,7 @@ reads, in part:
 ```json
 {
   "tool": "kar-conform",
-  "algorithm": "kar-conform-v1",
+  "algorithm": "kar-conform-v2",
   "verdict": "SOME_FAIL",
   "results": [
     { "name": "Run 1", "verdict": "PASS", "errors": [], "sha256": "54e8eda18d5d…" },
@@ -102,15 +102,19 @@ any machine, and no language model judges anything.
   the byte-identity check, the receipt check, the witness mutation gate and the ZIP build, and prints the
   ZIP's SHA-256.
 - **The mutation gate:** witness v0.6 (https://github.com/sjgant80-hub/witness, tag `v0.6`) made
-  95 single-operator changes (mutants) to the kernel and the tests caught 94 of them. The other 1 is an equivalent mutant: it cannot change behaviour, and its measured reason is in `witness.baseline.json`. The receipt is
-  `receipts/witness.json` in the repository, for kernel SHA-256 `9fe8c3a532e367cb4ae413eb0631ea07417675086369bd8a7841baa37e1ba085`. With the repository and
+  106 single-operator changes (mutants) to the kernel and the tests caught 105 of them. The other 1 is an equivalent mutant: it cannot change behaviour, and its measured reason is in `witness.baseline.json`. The receipt is
+  `receipts/witness.json` in the repository, for kernel SHA-256 `70e193e058b40fbcabaaa1361a243f3da63e5ebe6a6e30895555e8cc05697ae3`. With the repository and
   witness v0.6 side by side, `node gate.mjs --witness ../witness/witness.mjs` re-runs it.
 
 ## Where it stops
 
 - It checks shape, not truth: an output can satisfy the schema and still be factually wrong.
-- It covers the keyword subset listed above. Remote `$ref`, `if` / `then` / `else`, `dependentRequired`,
-  `unevaluatedProperties` and `$dynamicRef` are not checked, and an unknown `format` is ignored.
+- It checks the keywords listed above. Any other rule in the schema (`if` / `then` / `else`, `prefixItems`,
+  `dependentRequired`, `unevaluatedProperties`, `$dynamicRef`, …), and any `$ref` it cannot follow (a URL, or a
+  local name that is not there), FAILS every output with a message naming the rule and its schema path: it never
+  passes an output against a rule it did not check. Version 1 skipped such rules silently, so an output that broke
+  an `if` / `then` rule, or any schema with an unfollowable `$ref` inside `not`, came back PASS. An unknown
+  `format` name is not checked, as the JSON Schema standard allows.
 - `format` checks are best-effort patterns, and `pattern` uses JavaScript regular expressions.
 
 ---
