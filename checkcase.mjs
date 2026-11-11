@@ -64,6 +64,8 @@ export function checkCase(input, basis) {
       inputs: x,
       basis: f,
       hoursPerYear: { today: r2(hoursToday), withTool: r2(hoursWith), saved: r2(hoursToday - hoursWith) },
+      // one check in year one, in pounds: by hand at the median wage, and the seconds the tool takes to run and read
+      perCheck: { byHand: r2(x.minutesPerCheck / 60 * f.wage), withTool: r2(x.secondsPerCheck / 3600 * f.wage) },
       rows,
       total: { today: r2(todayTotal), withTool: r2(withTotal), saved: r2(todayTotal - withTotal) },
     };

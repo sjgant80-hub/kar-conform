@@ -45,6 +45,9 @@ test('a case worked by hand: 20 items a week, 12 minutes each, the tool takes ov
   // 20 x 52 = 1,040 copies a year; today 1,040 x 12 min = 208 h; with proofs 1,040 x (0.8 x 10 s + 0.2 x 12 min)
   const hoursWith = 1040 * (0.8 * 10 / 3600 + 0.2 * 12 / 60);
   assert.deepEqual(c.hoursPerYear, { today: 208, withTool: r2(hoursWith), saved: r2(208 - hoursWith) });
+  // one check by hand: 12 min at £19.67 an hour = £3.934; the tool: 10 s = £0.0546
+  assert.deepEqual(c.perCheck, { byHand: 3.93, withTool: 0.05 });
+  assert.deepEqual(checkCase({}, BASIS).perCheck, { byHand: 1.64, withTool: 0.03 });
   assert.equal(c.rows.length, 3);
   assert.deepEqual(c.rows[0], { year: 1, today: r2(208 * 19.67), withTool: r2(hoursWith * 19.67), saved: r2((208 - hoursWith) * 19.67) });
   // year 2 rises by one year of CPI, year 3 by two

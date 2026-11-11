@@ -6,6 +6,7 @@ import { checkCase, sourcesOf } from './checkcase.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, text) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; return e; };
 const money = (x) => '£' + Math.round(x).toLocaleString('en-GB');
+const pence = (x) => x >= 1 ? '£' + x.toFixed(2) : x > 0 ? Math.round(x * 100) + 'p' : 'under 1p';
 const getJSON = async (p) => { const r = await fetch(p, { cache: 'no-cache' }); if (!r.ok) throw new Error(p + ': ' + r.status); return r.json(); };
 
 async function gate() {
@@ -31,12 +32,14 @@ function run() {
   if (!r.ok) {
     // the kernel takes the share as 0 to 1; the form asks for a percentage, so say it in the form's terms
     $('ex-why').textContent = 'Check the inputs: ' + (/share/.test(r.why) ? 'the share is a percentage, 0 to 100' : r.why);
-    $('ex-big').textContent = ''; $('ex-rows').replaceChildren();
+    $('ex-big').textContent = ''; $('ex-per').textContent = ''; $('ex-rows').replaceChildren();
     return;
   }
   $('ex-why').textContent = '';
   $('ex-big').textContent = 'About ' + Math.round(r.hoursPerYear.saved).toLocaleString('en-GB') + ' hours of checking a year handed to the tool; '
     + money(r.total.saved) + ' over ' + r.inputs.years + ' year' + (r.inputs.years === 1 ? '' : 's') + ' at the UK median wage.';
+  $('ex-per').textContent = 'One check by hand costs about ' + pence(r.perCheck.byHand) + ' of staff time; running the tool and reading its verdict, about '
+    + pence(r.perCheck.withTool) + ' (year one). The totals scale with the volume you enter.';
   $('ex-rows').replaceChildren(...r.rows.map((y) => { const tr = el('tr'); for (const v of [String(y.year), money(y.today), money(y.withTool), money(y.saved)]) tr.append(el('td', v)); return tr; }));
 }
 async function costCase() {
